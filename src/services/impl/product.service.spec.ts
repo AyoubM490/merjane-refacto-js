@@ -200,16 +200,17 @@ describe('ProductService Tests', () => {
 			expect((await reload(product.id))!.available).toBe(0);
 		});
 
-		it('should notify expiration when out of stock even if not expired', async () => {
+		it('should announce a delay when out of stock but not expired (behaves like a NORMAL product)', async () => {
 			const expiryDate = new Date(Date.now() + (26 * DAY));
 			const product = await insertProduct({
-				type: 'EXPIRABLE', available: 0, name: 'Cheese', expiryDate,
+				type: 'EXPIRABLE', available: 0, leadTime: 12, name: 'Cheese', expiryDate,
 			});
 
 			await productService.processProduct(product);
 
-			expect(notificationServiceMock.sendExpirationNotification).toHaveBeenCalledWith('Cheese', expiryDate);
-			expect((await reload(product.id))!.available).toBe(0);
+			// Still fresh: the customer is told about the restocking delay, not a (false) expiration.
+			expect(notificationServiceMock.sendDelayNotification).toHaveBeenCalledWith(12, 'Cheese');
+			expect(notificationServiceMock.sendExpirationNotification).not.toHaveBeenCalled();
 		});
 	});
 });

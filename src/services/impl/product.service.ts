@@ -130,16 +130,22 @@ export class ProductService {
 
 	/**
 	 * EXPIRABLE products can be sold while in stock and not yet expired.
+	 * Expiration is the only event that makes them unavailable; as long as they
+	 * are not expired they behave like a NORMAL product (a restocking delay is
+	 * announced when out of stock).
 	 */
 	private async handleExpirableProduct(product: Product): Promise<void> {
 		const now = new Date();
+		const expired = product.expiryDate! <= now;
 
-		if (product.available > 0 && product.expiryDate! > now) {
-			await this.decrementStock(product);
-		} else {
+		if (expired) {
 			this.ns.sendExpirationNotification(product.name, product.expiryDate!);
 			product.available = 0;
 			await this.save(product);
+		} else if (product.available > 0) {
+			await this.decrementStock(product);
+		} else if (product.leadTime > 0) {
+			await this.notifyDelay(product.leadTime, product);
 		}
 	}
 
