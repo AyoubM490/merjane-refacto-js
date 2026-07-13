@@ -50,6 +50,25 @@ describe('MyController Integration Tests', () => {
 
 		const resultOrder = await database.query.orders.findFirst({where: eq(orders.id, orderId)});
 		expect(resultOrder!.id).toBe(orderId);
+
+		// Each product type is processed according to its own availability rules.
+		const processed = await database.query.products.findMany();
+		const byName = new Map(processed.map(p => [p.name, p]));
+
+		// NORMAL in stock -> decremented; out of stock -> delay notification.
+		expect(byName.get('USB Cable')!.available).toBe(29);
+		expect(byName.get('USB Dongle')!.available).toBe(0);
+		expect(notificationServiceMock.sendDelayNotification).toHaveBeenCalledWith(10, 'USB Dongle');
+
+		// EXPIRABLE not expired -> decremented; expired -> zeroed + notification.
+		expect(byName.get('Butter')!.available).toBe(29);
+		expect(byName.get('Milk')!.available).toBe(0);
+		expect(notificationServiceMock.sendExpirationNotification).toHaveBeenCalledWith('Milk', expect.any(Date));
+
+		// SEASONAL in season -> decremented; season not started -> out of stock notification.
+		expect(byName.get('Watermelon')!.available).toBe(29);
+		expect(byName.get('Grapes')!.available).toBe(30);
+		expect(notificationServiceMock.sendOutOfStockNotification).toHaveBeenCalledWith('Grapes');
 	});
 
 	function createProducts(): ProductInsert[] {
